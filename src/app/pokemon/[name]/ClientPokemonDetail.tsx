@@ -17,30 +17,21 @@ interface PokemonData {
     };
   };
   stats: { base_stat: number; stat: { name: string } }[];
-  abilities: { ability: { name: string } }[];
+  abilities: { ability: { name: string; url: string } }[];
   height: number;
   weight: number;
+  moves: { move: { name: string } }[];
 }
 
 interface SpeciesData {
   flavor_text_entries: { flavor_text: string; language: { name: string } }[];
-  varieties: any[];
+  varieties: { pokemon: { url: string; name: string } }[];
+  evolution_chain?: { url: string };
 }
 
-interface MoveData {
-  move: { name: string };
-}
-
-interface EvolutionChainData {
-  chain: {
-    species: { name: string };
-    evolves_to: any[];
-  };
-}
-
-interface AbilityDetail {
-  name: string;
-  effect_entries: { effect: string; language: { name: string } }[];
+interface EvolutionChain {
+  species: { name: string };
+  evolves_to: EvolutionChain[];
 }
 
 export interface ClientPokemonDetailProps {
@@ -51,18 +42,12 @@ export default function ClientPokemonDetail({ name }: ClientPokemonDetailProps) 
   const [pokemon, setPokemon] = useState<PokemonData | null>(null);
   const [species, setSpecies] = useState<SpeciesData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [moves, setMoves] = useState<MoveData[]>([]);
   const [evolution, setEvolution] = useState<string[]>([]);
-  const [abilitiesDetail, setAbilitiesDetail] = useState<AbilityDetail[]>([]);
-  const [relatedPokemons, setRelatedPokemons] = useState<any[]>([]);
-  const [relatedPokemonsFull, setRelatedPokemonsFull] = useState<any[]>([]);
+  const [relatedPokemonsFull, setRelatedPokemonsFull] = useState<PokemonData[]>([]);
   const [evoIdMap, setEvoIdMap] = useState<{ [name: string]: number }>({});
-  const [relatedIdMap, setRelatedIdMap] = useState<{ [name: string]: number }>({});
-  const [forms, setForms] = useState<any[]>([]);
-  const [formsData, setFormsData] = useState<any[]>([]);
+  const [formsData, setFormsData] = useState<PokemonData[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [showFormError, setShowFormError] = useState<number | null>(null);
-  const [types, setTypes] = useState<any[]>([]);
+  const [types, setTypes] = useState<{ name: string }[]>([]);
   const [selectedRelatedType, setSelectedRelatedType] = useState("");
   const router = useRouter();
 
@@ -71,31 +56,29 @@ export default function ClientPokemonDetail({ name }: ClientPokemonDetailProps) 
       setLoading(true);
       setError(null);
       try {
-        const pokeRes = await axios.get(`https://pokeapi.co/api/v2/pokemon/${name}`);
+        const pokeRes = await axios.get<PokemonData>(`https://pokeapi.co/api/v2/pokemon/${name}`);
         setPokemon(pokeRes.data);
-        setMoves(pokeRes.data.moves.slice(0, 10));
-        const speciesRes = await axios.get(`https://pokeapi.co/api/v2/pokemon-species/${name}`);
+        const speciesRes = await axios.get<SpeciesData>(`https://pokeapi.co/api/v2/pokemon-species/${name}`);
         setSpecies(speciesRes.data);
         // Lấy forms/varieties
         if (speciesRes.data.varieties) {
-          setForms(speciesRes.data.varieties);
           const formDetails = await Promise.all(
-            speciesRes.data.varieties.map(async (v: any) => {
+            speciesRes.data.varieties.map(async (v) => {
               try {
-                const res = await axios.get(v.pokemon.url);
+                const res = await axios.get<PokemonData>(v.pokemon.url);
                 return res.data;
               } catch {
                 return null;
               }
             })
           );
-          setFormsData(formDetails);
+          setFormsData(formDetails.filter((f): f is PokemonData => Boolean(f)));
         }
         // Evolution chain
         if (speciesRes.data.evolution_chain?.url) {
-          const evoRes = await axios.get(speciesRes.data.evolution_chain.url);
+          const evoRes = await axios.get<{ chain: EvolutionChain }>(speciesRes.data.evolution_chain.url);
           const evoNames: string[] = [];
-          function traverse(chain: any) {
+          function traverse(chain: EvolutionChain) {
             evoNames.push(chain.species.name);
             if (chain.evolves_to.length > 0) {
               chain.evolves_to.forEach(traverse);
@@ -107,44 +90,31 @@ export default function ClientPokemonDetail({ name }: ClientPokemonDetailProps) 
           await Promise.all(
             evoNames.map(async (evoName) => {
               try {
-                const res = await axios.get(`https://pokeapi.co/api/v2/pokemon/${evoName}`);
+                const res = await axios.get<PokemonData>(`https://pokeapi.co/api/v2/pokemon/${evoName}`);
                 evoIdObj[evoName] = res.data.id;
               } catch {}
             })
           );
           setEvoIdMap(evoIdObj);
         }
-        // Abilities detail
-        const abilities = pokeRes.data.abilities;
-        const abilityDetails = await Promise.all(
-          abilities.map(async (a: any) => {
-            const abRes = await axios.get(a.ability.url);
-            return abRes.data;
-          })
-        );
-        setAbilitiesDetail(abilityDetails);
         // Related pokemons by type
         if (pokeRes.data.types.length > 0) {
           const typeName = pokeRes.data.types[0].type.name;
-          const typeRes = await axios.get(`https://pokeapi.co/api/v2/type/${typeName}`);
-          setRelatedPokemons(typeRes.data.pokemon.slice(0, 10));
-          const relatedIdObj: { [name: string]: number } = {};
+          const typeRes = await axios.get<{ pokemon: { pokemon: { name: string } }[] }>(`https://pokeapi.co/api/v2/type/${typeName}`);
           const fullDetails = await Promise.all(
-            typeRes.data.pokemon.slice(0, 10).map(async (p: any) => {
+            typeRes.data.pokemon.slice(0, 10).map(async (p) => {
               try {
-                const res = await axios.get(`https://pokeapi.co/api/v2/pokemon/${p.pokemon.name}`);
-                relatedIdObj[p.pokemon.name] = res.data.id;
+                const res = await axios.get<PokemonData>(`https://pokeapi.co/api/v2/pokemon/${p.pokemon.name}`);
                 return res.data;
               } catch {
                 return null;
               }
             })
           );
-          setRelatedPokemonsFull(fullDetails.filter(Boolean));
-          setRelatedIdMap(relatedIdObj);
+          setRelatedPokemonsFull(fullDetails.filter((f): f is PokemonData => Boolean(f)));
         }
         setLoading(false);
-      } catch (err) {
+      } catch {
         setError('No data found for this Pokémon!');
         setPokemon(null);
         setSpecies(null);
@@ -156,17 +126,15 @@ export default function ClientPokemonDetail({ name }: ClientPokemonDetailProps) 
 
   useEffect(() => {
     const fetchTypes = async () => {
-      const res = await axios.get("https://pokeapi.co/api/v2/type");
-      setTypes(res.data.results.filter((t: any) => t.name !== "unknown" && t.name !== "shadow"));
+      const res = await axios.get<{ results: { name: string }[] }>("https://pokeapi.co/api/v2/type");
+      setTypes(res.data.results.filter((t) => t.name !== "unknown" && t.name !== "shadow"));
     };
     fetchTypes();
   }, []);
 
   if (error) {
     // Tìm form phù hợp trong formsData
-    const formFallback = formsData.find(
-      (f) => f && (f.id.toString() === name || f.name === name)
-    );
+    const formFallback = formsData.find((f: PokemonData) => f && (f.id.toString() === name || f.name === name));
     if (formFallback) {
       return (
         <div className="flex flex-col items-center mt-20">
@@ -200,7 +168,7 @@ export default function ClientPokemonDetail({ name }: ClientPokemonDetailProps) 
     return <div className="text-center mt-20 text-lg">Đang tải dữ liệu...</div>;
   }
 
-  const flavor = species.flavor_text_entries.find((f: any) => f.language.name === "en")?.flavor_text.replace(/\f|\n/g, " ") || "";
+  const flavor = species.flavor_text_entries.find((f: { flavor_text: string; language: { name: string } }) => f.language.name === "en")?.flavor_text.replace(/\f|\n/g, " ") || "";
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0a183d] to-[#1a2747] p-2 sm:p-4 font-sans text-white">
@@ -217,7 +185,7 @@ export default function ClientPokemonDetail({ name }: ClientPokemonDetailProps) 
             <div>
               <div className="text-base sm:text-lg font-bold mb-1 sm:mb-2 text-lime-200">Type</div>
               <div className="flex flex-wrap justify-center sm:justify-start gap-2">
-                {pokemon.types.map((t) => (
+                {pokemon.types.map((t: { type: { name: string } }) => (
                   <Link
                     key={t.type.name}
                     href={`/type/${t.type.name}`}
@@ -375,83 +343,71 @@ export default function ClientPokemonDetail({ name }: ClientPokemonDetailProps) 
           <div className="mb-4 sm:mb-8">
             <div className="font-bold text-base xs:text-lg sm:text-xl mb-2 sm:mb-4 text-cyan-200">Forms</div>
             <div className="flex flex-wrap gap-2 xs:gap-3 sm:gap-6 justify-center">
-              {formsData.map((form, idx) =>
-                form ? (
-                  <div key={form.id} className="bg-[#10182a] rounded-3xl border-2 border-cyan-400 shadow-lg p-4 flex flex-col items-center w-56 hover:scale-105 transition">
-                    <div className="relative w-40 h-40 flex items-center justify-center mb-2">
-                      <Image
-                        src={form.sprites.other["official-artwork"].front_default}
-                        alt={form.name}
-                        width={150}
-                        height={150}
-                        className="drop-shadow-lg transition-transform duration-500 ease-out animate-fadein hover:scale-110 animate-swing-horizontal"
-                      />
-                    </div>
-                    <div className="capitalize font-bold text-lg text-white mb-1 text-center drop-shadow">{form.name.replace(/-/g, ' ')}</div>
-                    <div className="text-[#00eaff] text-xs font-mono bg-[#10182a] bg-opacity-80 px-2 py-0 rounded-full border border-[#2e3a5e] shadow mb-1 inline-block min-w-[36px] text-center">
-                      {form.id.toString().padStart(4, "0")}
-                    </div>
-                    <div className="flex gap-2 mt-1 flex-wrap justify-center">
-                      {form.types.map((t: any) => (
-                        <span
-                          key={t.type.name}
-                          className={
-                            "text-xs px-3 py-1 rounded-full font-semibold shadow " +
-                            (t.type.name === "grass"
-                              ? "bg-lime-300 text-lime-900"
-                              : t.type.name === "poison"
-                              ? "bg-fuchsia-200 text-fuchsia-800"
-                              : t.type.name === "fire"
-                              ? "bg-orange-300 text-orange-900"
-                              : t.type.name === "water"
-                              ? "bg-blue-300 text-blue-900"
-                              : t.type.name === "electric"
-                              ? "bg-yellow-200 text-yellow-800"
-                              : t.type.name === "bug"
-                              ? "bg-green-200 text-green-800"
-                              : t.type.name === "flying"
-                              ? "bg-sky-200 text-sky-800"
-                              : t.type.name === "psychic"
-                              ? "bg-pink-200 text-pink-800"
-                              : t.type.name === "rock"
-                              ? "bg-yellow-800 text-yellow-100"
-                              : t.type.name === "ground"
-                              ? "bg-yellow-400 text-yellow-900"
-                              : t.type.name === "fairy"
-                              ? "bg-pink-100 text-pink-700"
-                              : t.type.name === "dragon"
-                              ? "bg-indigo-300 text-indigo-900"
-                              : t.type.name === "ice"
-                              ? "bg-cyan-100 text-cyan-800"
-                              : t.type.name === "fighting"
-                              ? "bg-red-800 text-red-100"
-                              : t.type.name === "ghost"
-                              ? "bg-purple-900 text-purple-100"
-                              : t.type.name === "steel"
-                              ? "bg-gray-400 text-gray-900"
-                              : t.type.name === "dark"
-                              ? "bg-gray-900 text-gray-100"
-                              : "bg-gray-200 text-gray-800"
-                            )
-                          }
-                        >
-                          type {t.type.name}
-                        </span>
-                      ))}
-                    </div>
+              {formsData.map((form: PokemonData) => (
+                <div key={form.id} className="bg-[#10182a] rounded-3xl border-2 border-cyan-400 shadow-lg p-4 flex flex-col items-center w-56 hover:scale-105 transition">
+                  <div className="relative w-40 h-40 flex items-center justify-center mb-2">
+                    <Image
+                      src={form.sprites.other["official-artwork"].front_default}
+                      alt={form.name}
+                      width={150}
+                      height={150}
+                      className="drop-shadow-lg transition-transform duration-500 ease-out animate-fadein hover:scale-110 animate-swing-horizontal"
+                    />
                   </div>
-                ) : (
-                  <div
-                    key={idx}
-                    className="bg-[#222] rounded-3xl border-2 border-gray-600 shadow-lg p-4 flex flex-col items-center w-56 opacity-50 relative"
-                  >
-                    <div className="w-32 h-32 flex items-center justify-center mb-2">
-                      <span className="text-gray-400">No data found</span>
-                    </div>
-                    <div className="capitalize font-bold text-lg text-gray-400 mb-1 text-center drop-shadow">No data found</div>
+                  <div className="capitalize font-bold text-lg text-white mb-1 text-center drop-shadow">{form.name.replace(/-/g, ' ')}</div>
+                  <div className="text-[#00eaff] text-xs font-mono bg-[#10182a] bg-opacity-80 px-2 py-0 rounded-full border border-[#2e3a5e] shadow mb-1 inline-block min-w-[36px] text-center">
+                    {form.id.toString().padStart(4, "0")}
                   </div>
-                )
-              )}
+                  <div className="flex gap-2 mt-1 flex-wrap justify-center">
+                    {form.types.map((t: { type: { name: string } }) => (
+                      <span
+                        key={t.type.name}
+                        className={
+                          "text-xs px-3 py-1 rounded-full font-semibold shadow " +
+                          (t.type.name === "grass"
+                            ? "bg-lime-300 text-lime-900"
+                            : t.type.name === "poison"
+                            ? "bg-fuchsia-200 text-fuchsia-800"
+                            : t.type.name === "fire"
+                            ? "bg-orange-300 text-orange-900"
+                            : t.type.name === "water"
+                            ? "bg-blue-300 text-blue-900"
+                            : t.type.name === "electric"
+                            ? "bg-yellow-200 text-yellow-800"
+                            : t.type.name === "bug"
+                            ? "bg-green-200 text-green-800"
+                            : t.type.name === "flying"
+                            ? "bg-sky-200 text-sky-800"
+                            : t.type.name === "psychic"
+                            ? "bg-pink-200 text-pink-800"
+                            : t.type.name === "rock"
+                            ? "bg-yellow-800 text-yellow-100"
+                            : t.type.name === "ground"
+                            ? "bg-yellow-400 text-yellow-900"
+                            : t.type.name === "fairy"
+                            ? "bg-pink-100 text-pink-700"
+                            : t.type.name === "dragon"
+                            ? "bg-indigo-300 text-indigo-900"
+                            : t.type.name === "ice"
+                            ? "bg-cyan-100 text-cyan-800"
+                            : t.type.name === "fighting"
+                            ? "bg-red-800 text-red-100"
+                            : t.type.name === "ghost"
+                            ? "bg-purple-900 text-purple-100"
+                            : t.type.name === "steel"
+                            ? "bg-gray-400 text-gray-900"
+                            : t.type.name === "dark"
+                            ? "bg-gray-900 text-gray-100"
+                            : "bg-gray-200 text-gray-800"
+                          )
+                        }
+                      >
+                        type {t.type.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -470,38 +426,38 @@ export default function ClientPokemonDetail({ name }: ClientPokemonDetailProps) 
                     // Nếu chọn All types, lấy lại danh sách theo type đầu tiên của Pokémon hiện tại
                     if (pokemon && pokemon.types.length > 0) {
                       const typeName = pokemon.types[0].type.name;
-                      const typeRes = await axios.get(`https://pokeapi.co/api/v2/type/${typeName}`);
+                      const typeRes = await axios.get<{ pokemon: { pokemon: { name: string } }[] }>(`https://pokeapi.co/api/v2/type/${typeName}`);
                       const fullDetails = await Promise.all(
-                        typeRes.data.pokemon.slice(0, 10).map(async (p: any) => {
+                        typeRes.data.pokemon.slice(0, 10).map(async (p) => {
                           try {
-                            const res = await axios.get(`https://pokeapi.co/api/v2/pokemon/${p.pokemon.name}`);
+                            const res = await axios.get<PokemonData>(`https://pokeapi.co/api/v2/pokemon/${p.pokemon.name}`);
                             return res.data;
                           } catch {
                             return null;
                           }
                         })
                       );
-                      setRelatedPokemonsFull(fullDetails.filter(Boolean));
+                      setRelatedPokemonsFull(fullDetails.filter((f): f is PokemonData => Boolean(f)));
                     }
                   } else {
                     // Nếu chọn type khác, gọi API lấy danh sách theo type đó
-                    const typeRes = await axios.get(`https://pokeapi.co/api/v2/type/${value}`);
+                    const typeRes = await axios.get<{ pokemon: { pokemon: { name: string } }[] }>(`https://pokeapi.co/api/v2/type/${value}`);
                     const fullDetails = await Promise.all(
-                      typeRes.data.pokemon.slice(0, 10).map(async (p: any) => {
+                      typeRes.data.pokemon.slice(0, 10).map(async (p) => {
                         try {
-                          const res = await axios.get(`https://pokeapi.co/api/v2/pokemon/${p.pokemon.name}`);
+                          const res = await axios.get<PokemonData>(`https://pokeapi.co/api/v2/pokemon/${p.pokemon.name}`);
                           return res.data;
                         } catch {
                           return null;
                         }
                       })
                     );
-                    setRelatedPokemonsFull(fullDetails.filter(Boolean));
+                    setRelatedPokemonsFull(fullDetails.filter((f): f is PokemonData => Boolean(f)));
                   }
                 }}
               >
                 <option value="">All types</option>
-                {types.map((type: any) => (
+                {types.map((type: { name: string }) => (
                   <option key={type.name} value={type.name} className="capitalize">
                     {type.name}
                   </option>
@@ -510,11 +466,11 @@ export default function ClientPokemonDetail({ name }: ClientPokemonDetailProps) 
             </div>
             <div className="flex flex-col gap-4">
               {relatedPokemonsFull
-                .filter((poke: any) => {
+                .filter((poke: PokemonData) => {
                   if (!selectedRelatedType) return true;
-                  return poke.types?.some((t: any) => t.type?.name === selectedRelatedType);
+                  return poke.types?.some((t: { type: { name: string } }) => t.type?.name === selectedRelatedType);
                 })
-                .map((poke: any, idx: number) => (
+                .map((poke: PokemonData, idx: number) => (
                   <div
                     key={poke.id || idx}
                     className="flex flex-row items-center bg-[#10182a] rounded-2xl shadow p-4 hover:bg-[#182040] transition group gap-6 cursor-pointer"

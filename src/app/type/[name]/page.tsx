@@ -58,14 +58,14 @@ export default function TypePage() {
     // Lấy danh sách type cho dropdown
     const fetchTypes = async () => {
       const res = await axios.get("https://pokeapi.co/api/v2/type");
-      setTypes(res.data.results.filter((t: any) => t.name !== "unknown" && t.name !== "shadow"));
+      setTypes(res.data.results.filter((t: { name: string; url: string }) => t.name !== "unknown" && t.name !== "shadow"));
     };
     fetchTypes();
   }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0a183d] to-[#1a2747] p-4 font-sans">
-      <h1 className="text-4xl font-extrabold text-center mb-10 text-yellow-300 drop-shadow-lg tracking-widest">Pokémon of type "{typeName}"</h1>
+      <h1 className="text-4xl font-extrabold text-center mb-10 text-yellow-300 drop-shadow-lg tracking-widest">Pokémon of type &quot;{typeName}&quot;</h1>
       <div className="flex flex-col sm:flex-row justify-center gap-4 mb-8 items-center">
         <button
           onClick={() => router.push("/")}

@@ -1,32 +1,30 @@
-import { Metadata } from "next";
 import ClientPokemonDetail from './ClientPokemonDetail';
+import axios from 'axios';
 
-export async function generateMetadata({ params }: { params: { name: string } }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ name: string }> }) {
+  const { name } = await params;
   try {
-    const pokeRes = await fetch(`https://pokeapi.co/api/v2/pokemon/${params.name}`);
-    if (!pokeRes.ok) throw new Error();
-    const pokemon = await pokeRes.json();
-    const speciesRes = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${params.name}`);
-    if (!speciesRes.ok) throw new Error();
-    const species = await speciesRes.json();
-    const flavor = species.flavor_text_entries.find((f: any) => f.language.name === "en")?.flavor_text.replace(/\f|\n/g, " ") || "Pokémon details";
+    const speciesRes = await axios.get(`https://pokeapi.co/api/v2/pokemon-species/${name}`);
+    const species = speciesRes.data;
+    const flavor = species.flavor_text_entries.find((f: { flavor_text: string; language: { name: string } }) => f.language.name === "en")?.flavor_text.replace(/\f|\n/g, " ") || "Pokémon details";
     return {
-      title: `${pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)} | Pokédex`,
+      title: `Pokémon: ${name.charAt(0).toUpperCase() + name.slice(1)}`,
       description: flavor,
       openGraph: {
-        title: `${pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)} | Pokédex`,
+        title: `Pokémon: ${name.charAt(0).toUpperCase() + name.slice(1)}`,
         description: flavor,
-        images: [pokemon.sprites.other["official-artwork"].front_default],
+        // Có thể thêm image nếu muốn
       },
     };
   } catch {
     return {
-      title: "Pokémon | Pokédex",
-      description: "Pokémon details",
+      title: `Pokémon: ${name}`,
+      description: `Thông tin chi tiết về Pokémon ${name} trong Pokédex.`,
     };
   }
 }
 
-export default function Page({ params }: { params: { name: string } }) {
-  return <ClientPokemonDetail name={params.name} />;
+export default async function Page({ params }: { params: Promise<{ name: string }> }) {
+  const { name } = await params;
+  return <ClientPokemonDetail name={name} />;
 } 
