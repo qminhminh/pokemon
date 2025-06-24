@@ -66,7 +66,7 @@ export default function Home() {
 
   const loadMore = async () => {
     setLoadingMore(true);
-    const res = await axios.get(`https://pokeapi.co/api/v2/pokemon?limit=100&offset=${offset}`);
+    const res = await axios.get(`https://pokeapi.co/api/v2/pokemon?limit=200&offset=${offset}`);
     const results: PokemonListItem[] = res.data.results;
     const pokemonDetails = await Promise.all(
       results.map(async (pokemon) => {
@@ -75,7 +75,7 @@ export default function Home() {
       })
     );
     setPokemons((prev) => [...prev, ...pokemonDetails]);
-    setOffset(offset + 100);
+    setOffset(offset + 200);
     setLoadingMore(false);
   };
 
@@ -131,7 +131,7 @@ export default function Home() {
               >
                 <div className="w-32 h-32 rounded-full bg-gradient-to-br from-[#1e2a4a] to-[#2e3a5e] flex items-center justify-center mb-3 shadow-inner border-4 border-[#2e3a5e] group-hover:shadow-[0_0_32px_8px_#00eaff99] transition">
                   <Image
-                    src={pokemon.sprites.other["official-artwork"].front_default}
+                    src={pokemon.sprites.other["official-artwork"].front_default || "/favicon.ico"}
                     alt={pokemon.name}
                     width={120}
                     height={120}
