@@ -89,7 +89,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0a183d] to-[#1a2747] p-4 font-sans">
-      <h1 className="text-5xl font-extrabold text-center mb-10 text-yellow-300 drop-shadow-lg tracking-widest glow-title">Pokédex</h1>
+      <h1 className="text-5xl font-extrabold text-center mb-10 text-yellow-300 drop-shadow-lg tracking-widest glow-title">Pokémon</h1>
       <div className="flex flex-col sm:flex-row justify-center gap-4 mb-10 items-center">
         <input
           type="text"
