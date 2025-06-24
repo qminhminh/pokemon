@@ -66,7 +66,7 @@ export default function Home() {
 
   const loadMore = async () => {
     setLoadingMore(true);
-    const res = await axios.get(`https://pokeapi.co/api/v2/pokemon?limit=20&offset=${offset}`);
+    const res = await axios.get(`https://pokeapi.co/api/v2/pokemon?limit=100&offset=${offset}`);
     const results: PokemonListItem[] = res.data.results;
     const pokemonDetails = await Promise.all(
       results.map(async (pokemon) => {
@@ -75,7 +75,7 @@ export default function Home() {
       })
     );
     setPokemons((prev) => [...prev, ...pokemonDetails]);
-    setOffset(offset + 20);
+    setOffset(offset + 100);
     setLoadingMore(false);
   };
 
